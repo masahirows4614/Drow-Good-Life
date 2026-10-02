@@ -29,7 +29,7 @@ async function start() {
   if (!session) { showLogin(); return; }
   rememberGoogleTokens(session);
 
-  const allowed = (import.meta.env.VITE_ALLOWED_EMAIL || "").toLowerCase();
+  const allowed = (import.meta.env.VITE_ALLOWED_EMAIL || "masahiro.ws4614@gmail.com").toLowerCase();
   if (allowed && (session.user.email || "").toLowerCase() !== allowed) {
     await signOut();
     showLogin("このアカウントでは使えません。登録したGoogleアカウントでログインしてください。");

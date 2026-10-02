@@ -5,7 +5,8 @@
 //   use("sample") -> AI calls through /api/ai (Anthropic API on the server)
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// Public values (safe to ship in the browser). Env vars override them.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://gqoioiqudpzepcpsvxje.supabase.co";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const configured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 export const supabase = configured
