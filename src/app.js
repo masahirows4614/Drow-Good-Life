@@ -3,10 +3,10 @@
 (function(){
 const CAL="Google Calendar";
 const COLORS=["a1","a2","a3","a4","a5","a6"];
-const MOODS=["だるい","不安","焦り","空っぽ","迷い"];
+const MOODS=["だるい","不安","焦り","空っぽ","迷い","誇れない"];
 const MOODL=["沈む","低め","普通","良い","最高"];
 const WD="日月火水木金土";
-const S={areas:[],tasks:[],triggers:[],journal:[],habits:[],diary:[],vision:null,view:"now",space:"all",showDone:false,cal:{state:"loading",events:[]},mood:null,newColor:"a1",dDate:null,dMood:0,dLoaded:null,diaryReady:false,theme:"system",synced:false};
+const S={areas:[],tasks:[],triggers:[],journal:[],habits:[],diary:[],proofs:[],vision:null,view:"now",space:"all",showDone:false,cal:{state:"loading",events:[]},mood:null,newColor:"a1",dDate:null,dMood:0,dLoaded:null,diaryReady:false,theme:"system",synced:false};
 let db=null,mcp=null,sample=null;
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -101,7 +101,7 @@ function renderNow(){
   $("todayAdd").textContent=sp==="all"?(list.length>=3?"Moves を開く":`${list.length?"次の":"最初の"}一手を Moves から選ぶ`):`${areaName(sp)} に一手を足す`;
   const radar=open().filter(t=>t.due&&daysUntil(t.due)<=14&&inSpace(t,sp)).sort((a,b)=>a.due.localeCompare(b.due));
   $("radarList").innerHTML=radar.length?radar.map(t=>{const n=daysUntil(t.due);return `<div class="rrow"><span class="d num">${md(t.due)}</span><span>${esc(short(t.title,30))}</span><span class="badge ${n<=2?"warn":"plain"}" style="${n<=2?"":"background:var(--row)"}">${n<0?"期限切れ":n===0?"今日":"あと"+n+"日"}</span></div>`}).join(""):`<div class="rrow" style="grid-template-columns:1fr"><span class="muted small">14日以内の締切はありません。</span></div>`;
-  renderArc();renderCal();renderBubble();renderRhythm();
+  renderArc();renderCal();renderBubble();renderRhythm();renderProof();
 }
 function arcPoint(h){const f=Math.max(0,Math.min(1,(h-7.5)/16.5));const a=Math.PI*(1-f);return [160+130*Math.cos(a),140-130*Math.sin(a),f]}
 function renderArc(){
@@ -131,14 +131,15 @@ function renderBubble(){
   const now=new Date(),h=now.getHours();
   const todayOpen=S.tasks.filter(t=>t.today&&!t.done);
   const late=(S.cal.events||[]).find(e=>e.start&&e.start.dateTime&&new Date(e.start.dateTime)>now&&(new Date(e.start.dateTime).getHours()>=23||(e.end&&e.end.dateTime&&dkey(new Date(e.end.dateTime))!==today()&&new Date(e.end.dateTime).getHours()>0)));
-  let msg,btn=null;
-  if(late){msg=`${late.start.dateTime.slice(11,16)}からの「${short(late.summary||"予定",16)}」が、就寝目標の24:00に近いです。残りの用事は前倒しにしませんか。`}
+  let msg,btn=null;const low=lowSignal();
+  if(low){msg=low;btn=["リカバリーを開く",null,"recover"]}
+  else if(late){msg=`${late.start.dateTime.slice(11,16)}からの「${short(late.summary||"予定",16)}」が、就寝目標の24:00に近いです。残りの用事は前倒しにしませんか。`}
   else if(todayOpen.length>3){msg=`今日の一手が${todayOpen.length}件あります。三手に絞ると、集中して終えやすくなります。`;btn=["Moves で絞る","moves"]}
   else if(!S.tasks.some(t=>t.today)){msg="今日の一手がまだありません。Moves から三手だけ選びましょう。";btn=["三手を選ぶ","moves"]}
   else if(h>=12&&!doneOn(today()).length&&todayOpen.length){msg=`午前の集中枠が過ぎました。「${short(todayOpen[0].title,18)}」を15分だけ進めませんか。`;btn=["Spark で着火","spark"]}
   else if(!todayOpen.length&&S.tasks.some(t=>t.today)){msg="今日の一手はすべて指しました。足跡を残して、早めに休みましょう。";btn=["Trace を書く","trace"]}
   else{const r=(S.vision&&S.vision.root)||"自分と家族の幸せ";msg=`いまの一手は「${short(r,20)}」につながっています。焦らず、一手ずつ。`}
-  $("bubble").innerHTML=`<div class="av">${STAR("#E8C66A",18)}</div><div class="col" style="gap:6px"><span class="who"><b>Polaris</b> · 軸チェック</span><div class="msg">${esc(msg)}</div>${btn?`<div class="acts"><button class="chip violet" data-go="${btn[1]}">${esc(btn[0])}</button></div>`:""}</div>`;
+  $("bubble").innerHTML=`<div class="av">${STAR("#E8C66A",18)}</div><div class="col" style="gap:6px"><span class="who"><b>Polaris</b> · 軸チェック</span><div class="msg">${esc(msg)}</div>${btn?`<div class="acts"><button class="chip violet" ${btn[2]?`data-act="${btn[2]}"`:`data-go="${btn[1]}"`}>${esc(btn[0])}</button></div>`:""}</div>`;
 }
 function renderRhythm(){
   const k=today(),h=habitDoc(k);
@@ -146,6 +147,80 @@ function renderRhythm(){
   const w=[];for(let i=6;i>=0;i--){const dk=addDays(k,-i);const d=new Date(dk+"T00:00:00");w.push(`<span class="${habitDoc(dk).run?"on":""}" title="${dk}">${WD[d.getDay()]}</span>`)}
   $("runWeek").innerHTML=w.join("");
 }
+
+// ---------- PROOF / RECOVERY ----------
+// 証 = 自分で書いた証 + 日記の「よかったこと」 + やり切った一手。誇りは「証が見える」ことで保たれる。
+function allProofs(){
+  const own=S.proofs.map(p=>({at:p.at||0,text:p.text,area:p.area||"",kind:"own"}));
+  const di=S.diary.filter(d=>d.good).map(d=>({at:new Date(d.id+"T21:00:00").getTime(),text:d.good,kind:"diary"}));
+  const done=S.tasks.filter(t=>t.done&&t.doneAt).map(t=>({at:t.doneAt,text:t.title,area:t.area||"",kind:"done"}));
+  return [...own,...di,...done].sort((a,b)=>b.at-a.at);
+}
+const proofOn=k=>allProofs().filter(p=>dkey(new Date(p.at))===k);
+const since=n=>Date.now()-n*864e5;
+function lowSignal(){
+  if(!db||!S.diaryReady)return "";
+  const all=allProofs();if(!all.length&&S.tasks.length<3)return "";
+  const k=today(),recent=all.filter(p=>p.at>=since(3));
+  const moods=[0,1,2].map(i=>(diaryOf(addDays(k,-i))||{}).mood||0).filter(Boolean);
+  if(moods.length>=2&&moods.filter(m=>m<=2).length>=2)return "ここ数日、調子が「沈む／低め」の日が続いています。軸と積んだ証を一度見直しませんか。";
+  if(!recent.length)return "3日間、証が記録されていません。証が「無い」のではなく「見えていない」だけかもしれません。";
+  return "";
+}
+function renderProof(){
+  if(!$("proofStars"))return;
+  const k=today();const w=[];
+  for(let i=13;i>=0;i--){const dk=addDays(k,-i),n=proofOn(dk).length;w.push(`<span class="${n?"on":""} ${n>=3?"hi":""} ${i===0?"now":""}" title="${md(dk)}：${n}個"></span>`)}
+  const n30=allProofs().filter(p=>p.at>=since(30)).length;
+  $("proofStars").innerHTML=w.join("")+`<span class="pcount num">${n30}<small>個 / 30日</small></span>`;
+  const mine=allProofs().filter(p=>p.kind!=="done"&&dkey(new Date(p.at))!==k);
+  const todayOwn=proofOn(k).filter(p=>p.kind==="own");
+  let echo="";
+  if(todayOwn.length)echo=`<span class="pl">今日の証</span>${todayOwn.map(p=>`<span>${esc(p.text)}</span>`).join("")}`;
+  else if(mine.length){const seed=[...k].reduce((a,c)=>a+c.charCodeAt(0),0);const p=mine[seed%mine.length];echo=`<span class="pl">${md(dkey(new Date(p.at)))} の自分より</span><span>${esc(p.text)}</span>`}
+  else echo=`<span class="small muted">「誇れること」は大きくなくていい。提案書を1枚進めた、早く起きた、自炊した——それで十分な証です。</span>`;
+  $("proofEcho").innerHTML=echo;
+}
+const ENC=[
+  "誇りは成果の大きさではなく、自分で選んで積んだかどうかで決まります。今日の一手を、自分の言葉で選び直しましょう。",
+  "活気には波があります。オーロラが昼に見えないのと同じで、消えたわけではありません。夜（休み）が来れば、また見えます。",
+  "比べる相手が見えると、自分の道が霞みます。自我作古——昨日の自分より一手進めば、それが証です。",
+  "いまの仕事は、将来の自分の道具を磨いている時間です。何を磨いているかを1つ言葉にすると、誇りが戻ってきます。",
+];
+function recover(){
+  const v=S.vision||{};
+  const whys=sortedAreas().filter(a=>a.why);
+  const ps=allProofs().filter(p=>p.kind!=="done").slice(0,4);
+  const doneN=allProofs().filter(p=>p.kind==="done"&&p.at>=since(30)).length;
+  const small=open().filter(t=>t.today)[0]||open().sort((a,b)=>(a.due||"9").localeCompare(b.due||"9"))[0];
+  sheet("リカバリー",`
+    <div class="rstep"><span class="rn">1</span><div class="col" style="gap:6px"><b>根っこに戻る</b>
+      <div class="rroot">${esc(v.root||"自分と家族の幸せ")}</div>${v.future?`<span class="small muted">${esc(v.future)}</span>`:""}
+      ${whys.length?`<div class="rwhy">${whys.map(a=>`<div><span class="dot" style="background:${areaColor(a.id)}"></span><b>${esc(a.name)}</b>　${esc(a.why)}</div>`).join("")}</div>`:`<span class="small muted">Base → スペースの「編集」で「このスペースで積む証」を書くと、ここに理由が並びます。</span>`}</div></div>
+    <div class="rstep"><span class="rn">2</span><div class="col" style="gap:6px"><b>積んだ証を見る</b>
+      ${ps.length?ps.map(p=>`<div class="rproof"><span class="num muted">${md(dkey(new Date(p.at)))}</span>${esc(p.text)}</div>`).join(""):`<span class="small muted">まだ書かれた証はありません。</span>`}
+      <span class="small muted">この30日でやり切った一手：<b class="num">${doneN}</b>個。見えていなかっただけで、積んではいます。</span></div></div>
+    <div class="rstep"><span class="rn">3</span><div class="col" style="gap:8px"><b>小さな一手</b>
+      <div class="rmsg" id="rMsg">${esc(ENC[Math.floor(Math.random()*ENC.length)])}</div>
+      <div class="acts" style="justify-content:flex-start;flex-wrap:wrap">
+        ${small?`<button class="btn primary sm" id="rSmall">「${esc(short(small.title,14))}」を5分だけ</button>`:""}
+        <button class="btn sm" id="rWalk">外を10分歩く</button>
+        <button class="btn sm" id="rRest">今日は回復日にする</button>
+      </div></div></div>`,(bg,close)=>{
+    const log=step=>db&&guard(col("journal").add({kind:"recover",at:Date.now(),feeling:S.mood==="誇れない"?"誇れない":"活気が落ちた",answer:bg.querySelector("#rMsg").textContent,step}));
+    if(small)bg.querySelector("#rSmall").onclick=async()=>{log(`${small.title} を5分`);if(!small.today)await upd("tasks",small.id,{today:true});close();go("spark");toast("5分だけ。始めたら勝ちです")};
+    bg.querySelector("#rWalk").onclick=async()=>{log("外を10分歩く");await addTask({title:"外を10分歩く",area:(S.areas.find(a=>a.id==="life")||{}).id||"",today:true});close();toast("今日の一手に入れました。景色を変えるのも一手です")};
+    bg.querySelector("#rRest").onclick=()=>{log("回復日");close();toast("休むことも一手。今日は24:00に寝られたら合格です")};
+    if(sample){const m=bg.querySelector("#rMsg");m.classList.add("thinking");
+      sample(`あなたはMasaの伴走者です。活気が落ちて、仕事や生活に誇りを持てずにいる本人に、日本語で2〜3文だけ声をかけます。
+条件：①下の「書いた証」か「やり切った一手」から具体的に1つ挙げて事実で励ます ②軸（根っこ・価値観）につなげる ③最後に今すぐできる小さな一歩を1つ。お世辞・大げさな表現・絵文字は禁止。説教しない。
+${context()}
+【いまの気分】${S.mood||"活気が落ちている"}
+【この30日にやり切った一手】${allProofs().filter(p=>p.kind==="done"&&p.at>=since(30)).slice(0,12).map(p=>p.text).join("、")||"なし"}`,{cache:false,modelTier:"quick"})
+      .then(r=>{if(r&&r.text&&document.body.contains(m))m.textContent=r.text.trim()}).catch(()=>{}).finally(()=>m.classList.remove("thinking"))}
+  });
+}
+$("proofText").addEventListener("keydown",async e=>{if(e.key==="Enter"&&!e.isComposing){const v=$("proofText").value.trim();if(!v||!need())return;await guard(col("proofs").add({text:v,area:S.space!=="all"?S.space:"",at:Date.now()}));$("proofText").value="";toast("証を1つ積みました")}});
 
 // ---------- MOVES ----------
 function renderMoves(){
@@ -162,7 +237,7 @@ function renderMoves(){
 function context(){
   const v=S.vision||{};
   const o=open().slice(0,25).map(t=>`- [${areaName(t.area)}] ${t.title}${t.due?`（期限 ${t.due}）`:""}${t.today?"（今日やる）":""}`).join("\n");
-  return `【根っこ】${v.root||"未設定"}\n【価値観の核】${v.core||"未設定"}\n【目指す未来】${v.future||"未設定"}\n【判断の優先順位】${v.priorities||"未設定"}\n【スペース】${sortedAreas().map(a=>a.name).join("、")||"未設定"}\n【進行中の一手】\n${o||"（なし）"}\n【今日】${today()}`;
+  return `【根っこ】${v.root||"未設定"}\n【価値観の核】${v.core||"未設定"}\n【目指す未来】${v.future||"未設定"}\n【判断の優先順位】${v.priorities||"未設定"}\n【スペース】${sortedAreas().map(a=>a.name).join("、")||"未設定"}\n【スペースで積む証（なぜやるか）】\n${sortedAreas().filter(a=>a.why).map(a=>`- ${a.name}：${a.why}`).join("\n")||"（未記入）"}\n【最近書いた証】\n${allProofs().filter(p=>p.kind!=="done").slice(0,8).map(p=>`- ${dkey(new Date(p.at))} ${p.text}`).join("\n")||"（なし）"}\n【進行中の一手】\n${o||"（なし）"}\n【今日】${today()}`;
 }
 function parseSecs(text){return text.split(/^##\s*/m).filter(s=>s.trim()).map(p=>{const [h,...r]=p.split("\n");return {k:h.trim(),v:r.join("\n").trim()}})}
 function stepOf(text,head){const s=parseSecs(text).find(x=>x.k.includes(head));return s?(s.v.split("\n").map(x=>x.replace(/^[-・*\s]+/,"").trim()).filter(Boolean)[0]||""):""}
@@ -178,7 +253,7 @@ function renderPolaris(){
     <div class="rootcard"><span class="lbl">POLARIS · 根っこ</span><span class="v">${esc(v.root||"未設定")}</span></div>
     ${[["価値観の核",v.core],["目指す未来",v.future],["判断の優先順位",v.priorities]].filter(x=>x[1]).map(([k,val])=>`<div class="axis"><span class="k">${k}</span><span class="v">${esc(val)}</span></div>`).join("")||`<span class="small muted">Base で軸を書くと、Polaris がそこへ向かってたどります。</span>`}`;
   const j=[...S.journal].sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,20);
-  const lab={compass:["Polaris",""],ignite:["Spark","gold"],review:["週の振り返り","green"]};
+  const lab={compass:["Polaris",""],ignite:["Spark","gold"],review:["週の振り返り","green"],recover:["リカバリー","aurora"]};
   $("journalList").innerHTML=j.length?j.map(e=>{const d=new Date(e.at||0);const [l,c]=lab[e.kind]||["記録",""];return `<details class="rec"><summary><span class="meta"><span class="num">${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}</span><span class="pill ${c}">${l}</span></span><span class="small">${esc(short(e.feeling||e.step||"",60))}</span></summary><div class="body">${e.answer?esc(e.answer.replace(/^##\s*/gm,"■ ")):""}${e.step?`\n次の一歩：${esc(e.step)}`:""}</div></details>`}).join(""):`<div class="empty">たどった記録がここに並びます。読み返すと、悩みの変化と積んだ一手が見えます。</div>`;
 }
 let compassCtl=null;
@@ -334,9 +409,9 @@ function editTask(t){
   });
 }
 function editArea(a){let color=COLORS.includes(a.color)?a.color:"a4";
-  sheet("スペースを編集",`<label class="field"><span>名前</span><input class="in" type="text" id="aN" value="${esc(a.name)}"></label><div class="swatches" id="aSw"></div><span class="small muted">削除すると、このスペースの一手は「未分類」に移ります。</span><div class="acts"><button class="btn danger" id="aDel">削除</button><button class="btn primary" id="aSave">保存</button></div>`,(bg,close)=>{
+  sheet("スペースを編集",`<label class="field"><span>名前</span><input class="in" type="text" id="aN" value="${esc(a.name)}"></label><label class="field"><span>このスペースで積む証（なぜやるか）</span><textarea class="in" id="aW" placeholder="例：提案〜PMを実戦で回す力は、将来まちの開発を動かす力になる">${esc(a.why||"")}</textarea></label><div class="swatches" id="aSw"></div><span class="small muted">削除すると、このスペースの一手は「未分類」に移ります。</span><div class="acts"><button class="btn danger" id="aDel">削除</button><button class="btn primary" id="aSave">保存</button></div>`,(bg,close)=>{
     const sw=()=>{bg.querySelector("#aSw").innerHTML=COLORS.map(c=>`<button class="sw ${color===c?"on":""}" style="background:var(--area-${c.slice(1)})" data-c="${c}" aria-label="色"></button>`).join("");bg.querySelectorAll("#aSw [data-c]").forEach(b=>b.onclick=()=>{color=b.dataset.c;sw()})};sw();
-    bg.querySelector("#aSave").onclick=async()=>{const n=bg.querySelector("#aN").value.trim();if(!n){toast("名前を入れてください");return}await upd("areas",a.id,{name:n,color});close();toast("保存しました")};
+    bg.querySelector("#aSave").onclick=async()=>{const n=bg.querySelector("#aN").value.trim();if(!n){toast("名前を入れてください");return}await upd("areas",a.id,{name:n,color,why:bg.querySelector("#aW").value.trim()});close();toast("保存しました")};
     armDelete(bg.querySelector("#aDel"),async()=>{for(const t of S.tasks.filter(t=>t.area===a.id))await upd("tasks",t.id,{area:""});await del("areas",a.id);if(S.space===a.id)S.space="all";close();toast("削除しました")});
   })}
 function editTrigger(x){x=x||{};
@@ -376,7 +451,8 @@ document.addEventListener("click",async e=>{
   if(act==="today"&&t){upd("tasks",id,{today:!t.today});return}
   if(act==="edit"&&t){editTask(t);return}
   if(act==="habit"){if(!need())return;const k=today(),h=habitDoc(k);const d={sleep:!!h.sleep,wake:!!h.wake,run:!!h.run};d[id]=!d[id];guard(col("habits").doc(k).set(d));return}
-  if(act==="mood"){S.mood=S.mood===id?null:id;renderSpark();return}
+  if(act==="mood"){S.mood=S.mood===id?null:id;renderSpark();if(S.mood==="誇れない")recover();return}
+  if(act==="recover"){recover();return}
   if(act==="dmood"){const v=+id;S.dMood=S.dMood===v?0:v;renderMood();return}
   if(act==="diary"){S.dDate=id;loadDiary();renderTrace();window.scrollTo(0,0);return}
   if(act==="theme"){setTheme(id);return}
@@ -406,7 +482,7 @@ const C=window.__backend;
 const setSync=(txt,ok)=>{$("syncState").innerHTML=`<span class="syncdot ${ok?"":"pulse"}" style="${ok?"":"background:var(--muted)"}"></span>${txt}`};
 if(!C||!C.use){S.cal={state:"off",events:[],msg:"ログインすると、予定が表示されます。"};banner("ログインすると、データの保存とGoogleカレンダー連携が使えます。");setSync("保存は無効",false);render();return}
 C.use("db").then(d=>{db=d;if(!db){banner("サインインするとデータが保存されます。");setSync("保存は無効",false);return}
-  ["areas","tasks","triggers","journal","habits","diary"].forEach(n=>col(n).onSnapshot(s=>{S[n]=s.docs.map(x=>({...x.data(),id:x.id}));if(n==="diary")S.diaryReady=true;setSync("同期済み",true);render()},err=>{console.error(err);setSync("同期が止まりました",false);banner("データの読み込みが止まりました。ページを開き直してください。")}));
+  ["areas","tasks","triggers","journal","habits","diary","proofs"].forEach(n=>col(n).onSnapshot(s=>{S[n]=s.docs.map(x=>({...x.data(),id:x.id}));if(n==="diary")S.diaryReady=true;setSync("同期済み",true);render()},err=>{console.error(err);setSync("同期が止まりました",false);banner("データの読み込みが止まりました。ページを開き直してください。")}));
   db.doc("vision/main").onSnapshot(s=>{S.vision=s.data()||null;renderPolaris();renderBase();renderBubble()},()=>{});
 });
 C.use("mcp").then(m=>{mcp=m;if(!mcp){S.cal={state:"off",events:[]};renderCal();return}watchCal()});

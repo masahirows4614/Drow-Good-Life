@@ -356,3 +356,25 @@ html,body{margin:0;min-height:100%}
 
 [hidden]{display:none!important}
 img{max-width:100%}
+
+/* 証（Proof） & リカバリー */
+.proof{gap:12px}
+.pstars{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pstars span:not(.pcount){width:12px;height:12px;border-radius:50%;background:var(--row);border:1px solid var(--line);transition:transform .2s}
+.pstars span.on{background:var(--aurora);border-color:var(--aurora);box-shadow:0 0 10px rgba(52,201,165,.55)}
+.pstars span.hi{background:#E8C66A;border-color:#E8C66A;box-shadow:0 0 12px rgba(232,198,106,.6)}
+.pstars span.now{outline:2px solid var(--violet);outline-offset:2px}
+.pstars span:hover{transform:scale(1.25)}
+.pcount{margin-left:auto;font-weight:700;font-size:18px}.pcount small{font-size:11px;font-weight:500;color:var(--muted);margin-left:2px}
+.pecho{display:flex;flex-direction:column;gap:4px;font-size:14px}
+.pecho .pl{font-size:11px;color:var(--violet-ink);letter-spacing:.04em}
+.rstep{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}
+.rstep:first-of-type{border-top:0}
+.rn{width:24px;height:24px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;background:linear-gradient(135deg,#1FD8B0,#9C8CF0);box-shadow:0 0 12px rgba(52,201,165,.4)}
+.rroot{font-size:17px;font-weight:700}
+.rwhy{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.rwhy .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.rproof{display:flex;gap:10px;font-size:14px}
+.rmsg{font-size:14px;line-height:1.7;padding:10px 12px;border-radius:12px;background:var(--row)}
+.rmsg.thinking{opacity:.6}
+.pill.aurora{background:var(--aurora-soft);color:var(--aurora-ink)}
